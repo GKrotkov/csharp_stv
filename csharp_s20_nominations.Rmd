@@ -1,0 +1,68 @@
+---
+title: "csharp_s20_nominations"
+author: "Gabriel Krotkov"
+date: "April 4, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+```
+
+
+# Data Reading & Cleaning
+```{r}
+noms <- read_csv("2021noms.csv")
+
+# Delete timestamps, rename
+noms <- noms[,-1]
+names(noms) <- c("nominee", "position", "reason")
+
+# Consolidate nicknames
+noms$nominee <- replace(noms$nominee, noms$nominee == "Zachary Lee", "Zach Lee")
+noms$nominee <- replace(noms$nominee, noms$nominee == "V Shiau", "V")
+noms$nominee <- replace(noms$nominee, noms$nominee == "V shiao", "V")
+noms$nominee <- replace(noms$nominee, noms$nominee == "Yoori", "Yoori Kim")
+noms$nominee <- replace(noms$nominee, noms$nominee == "Laura", "Laura Wu")
+noms$nominee <- replace(noms$nominee, noms$nominee == "Malaika", "Malaika Alphons")
+
+
+
+noms$nominee <- tolower(noms$nominee)
+noms$position <- tolower(noms$position)
+```
+
+# Sorting/Consolidation
+```{r}
+# Sort by name
+noms <- noms[order(noms$nominee, noms$position), ]
+id <- paste(noms$nominee, ": ", noms$position, sep = "")
+noms$id <- id
+id <- unique(id)
+filtered <- data.frame(id)
+filtered$reason <- rep("", length(id))
+
+# Consolidate duplicates
+for (i in 1:nrow(noms)){
+  if(!is.na(noms$reason[i])){
+    idx <- which(filtered$id == noms$id[i])
+    filtered$reason[idx] <- paste(filtered$reason[idx], noms$reason[i], 
+                                "; ", sep = "")
+  }
+}
+
+# Resplit name & position
+filtered <- separate(filtered, id, c("name", "position"), sep = ":")
+```
+
+
+# Export
+```{r}
+write.csv(filtered, "2021nominations.csv")
+```
+

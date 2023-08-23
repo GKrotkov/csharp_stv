@@ -1,0 +1,120 @@
+---
+title: "csharp_s20_stv"
+author: "Gabriel Krotkov"
+date: "April 28, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+```
+
+# Data Reading & Cleaning
+
+```{r}
+raw <- read_csv("s20_votes.csv")
+
+raw <- raw[, -1]
+
+names(raw) <- tolower(names(raw))
+
+# NOTE: Name your positions something sensible. The grep functions I use
+# later in this document don't like the character "+", for example.
+
+# Order alphabetically
+sorted <- raw[, order(names(raw))]
+
+# Change all "abstain" votes to "NA"
+sorted <- data.frame(lapply(sorted, 
+                            function(x) {gsub("Abstain", NA, x)}))
+sorted <- data.frame(lapply(sorted, as.character), stringsAsFactors=FALSE)
+
+# Generate list of positions
+positions <- unique(substr(names(sorted), 1, nchar(names(sorted)) - 4))
+```
+
+# Run STV on a single position
+
+```{r}
+# Sort NAs to the back of each vote entry
+shift_na <- function(x) {
+    # count NA
+    num.na <- sum(is.na(x))
+    # remove NA
+    x <- x[!is.na(x)]
+    # glue the number of NAs at the end
+    x <- c(x, rep(NA, num.na))
+    return(x)
+}
+
+# Applies shift_na to all rows of the data
+redistribute <- function(votes){
+  for (i in 1:nrow(votes)){
+    votes[i, ] <- shift_na(votes[i, ])
+  }
+  return(votes)
+}
+
+
+# votes is a df with the data of voting for 1 position
+# Returns the name of the election winner
+stv <- function(votes){
+  names(votes) <- as.character(1:ncol(votes))
+  first_choice <- table(votes[, 1])
+  while (max(first_choice)/sum(first_choice) < .5){
+    # Eliminate the candidate with the fewest number of 
+    # first choice votes.
+    lo <- names(which(first_choice == min(first_choice)))
+    votes[votes == lo] <- NA
+
+    # Redistribute votes
+    votes <- redistribute(votes)
+    # Eliminate NA rows, rename rows
+    votes <- votes[apply(votes,1,function(x)any(!is.na(x))), ]
+    names(votes) <- as.character(1:ncol(votes))
+    # Recompute first choice
+    first_choice <- table(votes[, 1])
+  }
+  
+  return(names(which(first_choice == max(first_choice))))
+}
+```
+
+# Apply STV to each position
+
+```{r}
+winners <- rep("", length(positions))
+
+for (i in 1:length(positions)){
+  # Isolate the position's votes
+  votes <- sorted[, grep(positions[i], names(sorted))]
+  winners[i] <- stv(votes)
+}
+
+# Now the winners and position vectors will line up and you know what's what!
+```
+
+# Ok, what happens if we get a decline?
+
+```{r}
+# Well, you run STV as if they didn't vote. 
+# Make this variable the position
+decline_position <- "<position here, as appears in data>"
+# Make this variable the decliner(s)
+decliners <- "<name here, as appears in data>"
+
+votes <- sorted[, grep(decline_position, names(sorted))]
+
+# Eliminate decliners
+for (i in length(decliners)){
+  votes[votes == decliners[i]] <- NA
+}
+# Re-run STV
+stv(votes)
+```
+
